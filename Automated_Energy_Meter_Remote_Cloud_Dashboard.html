@@ -1,0 +1,167 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Automated Energy Meter — Cloud Dashboard</title>
+<style>
+:root{
+  --bg:#07111f; --card:#0d1b2e; --card2:#10243c; --text:#eef6ff;
+  --muted:#9fb2c8; --accent:#35d0ba; --border:rgba(255,255,255,.09);
+  --danger:#ff6b6b; --shadow:0 18px 50px rgba(0,0,0,.28);
+}
+*{box-sizing:border-box}
+body{margin:0;font-family:Inter,system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;
+background:linear-gradient(145deg,#06101d,#0a1829 55%,#07111f);color:var(--text);min-height:100vh}
+.wrap{max-width:1180px;margin:auto;padding:24px}
+header{display:flex;justify-content:space-between;gap:18px;align-items:center;margin-bottom:22px}
+h1{font-size:clamp(24px,4vw,38px);margin:0 0 5px;font-weight:800}
+.subtitle{color:var(--muted);font-size:14px}
+.status{display:flex;align-items:center;gap:9px;padding:10px 14px;border:1px solid var(--border);
+border-radius:999px;background:rgba(255,255,255,.04);font-size:13px;white-space:nowrap}
+.dot{width:9px;height:9px;border-radius:50%;background:var(--danger);box-shadow:0 0 12px currentColor}
+.online .dot{background:var(--accent)}
+.controls{background:var(--card);border:1px solid var(--border);border-radius:18px;padding:16px;
+box-shadow:var(--shadow);margin-bottom:20px}
+.controls-grid{display:grid;grid-template-columns:1.2fr 1.2fr auto;gap:12px}
+label{font-size:12px;color:var(--muted);display:block;margin-bottom:6px}
+input{width:100%;padding:12px 13px;border-radius:11px;border:1px solid var(--border);
+background:#081526;color:var(--text);outline:none}
+button{border:0;border-radius:11px;padding:12px 18px;background:var(--accent);color:#06201b;
+font-weight:800;cursor:pointer;align-self:end}
+button:hover{filter:brightness(1.08)}
+.grid{display:grid;grid-template-columns:repeat(4,1fr);gap:15px}
+.card{background:linear-gradient(145deg,var(--card),var(--card2));border:1px solid var(--border);
+border-radius:18px;padding:20px;box-shadow:var(--shadow);min-height:145px}
+.icon{font-size:24px;margin-bottom:12px}
+.name{color:var(--muted);font-size:13px;font-weight:700;text-transform:uppercase;letter-spacing:.08em}
+.value{font-size:31px;font-weight:800;margin-top:9px;letter-spacing:-.02em}
+.unit{font-size:14px;color:var(--muted);margin-left:4px;font-weight:600}
+.small{font-size:12px;color:var(--muted);margin-top:10px}
+.panel{margin-top:20px;background:var(--card);border:1px solid var(--border);border-radius:18px;
+padding:20px;box-shadow:var(--shadow)}
+.panel h2{font-size:18px;margin:0 0 15px}
+.meta{display:grid;grid-template-columns:repeat(3,1fr);gap:12px}
+.meta-box{background:rgba(255,255,255,.035);padding:13px;border-radius:12px}
+.meta-title{font-size:11px;color:var(--muted);text-transform:uppercase}
+.meta-value{font-size:14px;font-weight:700;margin-top:5px;word-break:break-all}
+.error{color:#ffb1b1}
+footer{text-align:center;color:var(--muted);font-size:12px;padding:22px 0 5px}
+@media(max-width:900px){.grid{grid-template-columns:repeat(2,1fr)}}
+@media(max-width:620px){.wrap{padding:15px}.controls-grid,.meta{grid-template-columns:1fr}.grid{grid-template-columns:1fr 1fr}
+.value{font-size:25px}header{align-items:flex-start;flex-direction:column}}
+</style>
+</head>
+<body>
+<div class="wrap">
+<header>
+  <div>
+    <h1>AUTOMATED ENERGY METER</h1>
+    <div class="subtitle">Remote Cloud Dashboard • ESP8266 + PZEM-004T</div>
+  </div>
+  <div id="status" class="status"><span class="dot"></span><span id="statusText">Connecting…</span></div>
+</header>
+
+<section class="controls">
+  <div class="controls-grid">
+    <div>
+      <label for="channelId">ThingSpeak Channel ID</label>
+      <input id="channelId" placeholder="Enter your Channel ID">
+    </div>
+    <div>
+      <label for="readKey">Read API Key (only if channel is private)</label>
+      <input id="readKey" placeholder="Enter Read API Key">
+    </div>
+    <button onclick="saveAndLoad()">CONNECT</button>
+  </div>
+  <div class="small">The dashboard reads only the latest ThingSpeak entry. Your ESP8266 can keep using the existing firmware unchanged.</div>
+</section>
+
+<main class="grid">
+  <div class="card"><div class="icon">⚡</div><div class="name">Voltage</div><div class="value" id="voltage">—<span class="unit">V</span></div><div class="small">Field 1</div></div>
+  <div class="card"><div class="icon">🔌</div><div class="name">Current</div><div class="value" id="current">—<span class="unit">A</span></div><div class="small">Field 2</div></div>
+  <div class="card"><div class="icon">💡</div><div class="name">Power</div><div class="value" id="power">—<span class="unit">W</span></div><div class="small">Field 3</div></div>
+  <div class="card"><div class="icon">📊</div><div class="name">Total Energy</div><div class="value" id="energy">—<span class="unit">kWh</span></div><div class="small">Field 4</div></div>
+  <div class="card"><div class="icon">🌀</div><div class="name">Frequency</div><div class="value" id="frequency">—<span class="unit">Hz</span></div><div class="small">Field 5</div></div>
+  <div class="card"><div class="icon">📐</div><div class="name">Power Factor</div><div class="value" id="pf">—</div><div class="small">Field 6</div></div>
+  <div class="card"><div class="icon">📅</div><div class="name">Daily Energy</div><div class="value" id="daily">—<span class="unit">kWh</span></div><div class="small">Field 7</div></div>
+  <div class="card"><div class="icon">📆</div><div class="name">Monthly Energy</div><div class="value" id="monthly">—<span class="unit">kWh</span></div><div class="small">Field 8</div></div>
+</main>
+
+<section class="panel">
+  <h2>Cloud Connection</h2>
+  <div class="meta">
+    <div class="meta-box"><div class="meta-title">Last update</div><div class="meta-value" id="lastUpdate">—</div></div>
+    <div class="meta-box"><div class="meta-title">Entry ID</div><div class="meta-value" id="entryId">—</div></div>
+    <div class="meta-box"><div class="meta-title">Channel</div><div class="meta-value" id="channelDisplay">—</div></div>
+  </div>
+  <div class="small error" id="error"></div>
+</section>
+
+<footer>Automated Energy Meter • Cloud values refresh every 20 seconds</footer>
+</div>
+
+<script>
+const REFRESH_MS = 20000;
+const $ = id => document.getElementById(id);
+const fields = {
+  voltage:["voltage",1], current:["current",2], power:["power",1],
+  energy:["energy",3], frequency:["frequency",1], pf:["pf",2],
+  daily:["daily",3], monthly:["monthly",3]
+};
+
+function saveAndLoad(){
+  localStorage.setItem("aem_channel", $("channelId").value.trim());
+  localStorage.setItem("aem_readkey", $("readKey").value.trim());
+  loadData();
+}
+function fmt(v, decimals){
+  const n = Number(v);
+  return Number.isFinite(n) ? n.toFixed(decimals) : "—";
+}
+function setValue(id, value, decimals, unit){
+  $(id).innerHTML = fmt(value, decimals) + (unit ? `<span class="unit">${unit}</span>` : "");
+}
+async function loadData(){
+  const channel = $("channelId").value.trim();
+  const key = $("readKey").value.trim();
+  $("error").textContent = "";
+  if(!channel){
+    $("statusText").textContent = "Enter Channel ID";
+    $("status").classList.remove("online");
+    return;
+  }
+  let url = `https://api.thingspeak.com/channels/${encodeURIComponent(channel)}/feeds/last.json`;
+  if(key) url += `?api_key=${encodeURIComponent(key)}`;
+  try{
+    const res = await fetch(url, {cache:"no-store"});
+    if(!res.ok) throw new Error("HTTP " + res.status);
+    const d = await res.json();
+    if(!d || !d.entry_id) throw new Error("No latest ThingSpeak entry was returned.");
+    setValue("voltage",d.field1,1,"V");
+    setValue("current",d.field2,2,"A");
+    setValue("power",d.field3,1,"W");
+    setValue("energy",d.field4,3,"kWh");
+    setValue("frequency",d.field5,1,"Hz");
+    setValue("pf",d.field6,2,"");
+    setValue("daily",d.field7,3,"kWh");
+    setValue("monthly",d.field8,3,"kWh");
+    $("entryId").textContent = d.entry_id;
+    $("lastUpdate").textContent = new Date(d.created_at).toLocaleString("en-IN",{dateStyle:"medium",timeStyle:"medium"});
+    $("channelDisplay").textContent = channel;
+    $("statusText").textContent = "Cloud connected";
+    $("status").classList.add("online");
+  }catch(err){
+    $("statusText").textContent = "Cloud connection failed";
+    $("status").classList.remove("online");
+    $("error").textContent = "Error: " + err.message + " — check Channel ID and Read API Key.";
+  }
+}
+
+$("channelId").value = localStorage.getItem("aem_channel") || "";
+$("readKey").value = localStorage.getItem("aem_readkey") || "";
+loadData();
+setInterval(loadData, REFRESH_MS);
+</script>
+</body>
+</html>
